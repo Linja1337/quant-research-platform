@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Demo outputs are committed (PNG), but scratch outputs are not
+demos/output/_scratch/
+demos/output/*.csv
+demos/output/*.json
+
+# Site build artifacts
+docs/site/_build/
+docs/site/.parcel-cache/
+
+# Temp
+*.tmp
+*.bak
+*.log
