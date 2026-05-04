@@ -162,7 +162,11 @@ def plot(close: np.ndarray, eq_buggy, eq_correct, eq_third, out_path: Path) -> N
     _style(ax_top, text_color)
 
     # Bottom: ratio between the buggy curve and one of the correct ones.
-    ratio = np.where(np.abs(eq_correct) > 1e-9, eq_buggy / eq_correct, np.nan)
+    # np.where evaluates both branches before selecting, so the divide must
+    # be wrapped in errstate to suppress the cosmetic divide-by-zero on
+    # cells the where clause discards.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(np.abs(eq_correct) > 1e-9, eq_buggy / eq_correct, np.nan)
     ax_bot.plot(bars, ratio, color=accent_buggy, linewidth=1.4)
     ax_bot.axhline(1.0 / POINT_MULTIPLIER, color="#dc2626", linestyle="--", linewidth=1.0,
                    label=f"expected ratio if multiplier is wrong: 1 / {POINT_MULTIPLIER:.0f} = {1 / POINT_MULTIPLIER:.3f}")
