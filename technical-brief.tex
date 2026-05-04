@@ -1,0 +1,135 @@
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[margin=0.95in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+\definecolor{accent}{HTML}{1f3b6d}
+\definecolor{rule}{HTML}{c4ccd6}
+
+\titleformat{\section}{\sffamily\bfseries\color{accent}\large}{\thesection.}{0.4em}{}
+\titleformat{\subsection}{\sffamily\bfseries\color{accent}\normalsize}{\thesubsection}{0.4em}{}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.15}
+
+\title{\vspace{-3em}\sffamily\bfseries Quantitative Trading Research Platform\\[0.2em]
+       \large\mdseries\color{accent} Methodology, Architecture, and Engineering Decisions}
+\author{\sffamily Salman Linjawi\\
+        \small \texttt{linjakid@gmail.com} \, \, \, \texttt{github.com/Linja1337/quant-research-platform}}
+\date{\sffamily\small May 2026}
+
+\begin{document}
+
+\maketitle
+\vspace{-1.5em}
+{\color{rule}\hrule height 0.5pt}
+\vspace{0.5em}
+
+\section{Summary}
+
+A hybrid C\#\,/\,Python platform for designing systematic futures and crypto strategies, validating them with statistical machinery from the academic literature (CSCV, PBO, DSR, walk-forward, permutation tests), and reconciling execution semantics across multiple backtesting frameworks before any live deployment. The public repository is a sanitized showcase of the architecture, the validation methodology, runnable synthetic-data demonstrations of every technique, and the engineering decisions behind the stack.
+
+The platform's premise is that any backtest is overfit until proven otherwise. The validation gates exist to shoulder the burden of proof. Each gate is designed to catch failure modes that the others miss: walk-forward catches IS-to-OOS degradation, CSCV catches selection bias from picking the IS-best, DSR catches multiple-testing inflation, permutation tests catch market drift mistaken for signal, parameter stability catches knife-edge fits, and parity audits catch implementation bugs. A candidate must clear all six to be considered deployment-eligible. Selectively waiving a gate is explicitly disallowed.
+
+\subsection{Architecture in one paragraph}
+
+The C\# layer (running on a commercial trading platform) handles live order routing and is the execution authority. The Python layer (NumPy, pandas, scipy, Optuna, DEAP, Numba) handles research, optimization, and validation. A custom Numba-compiled engine runs roughly a thousand backtests per second on a laptop, which is what makes 200-trial Optuna sweeps and 80-configuration CSCV grids feasible without a cluster. Cross-framework parity audits reconcile the C\# strategy against three independent Python frameworks (Backtrader, backtesting.py, vectorbt). A Markdown decision log carries memory across sessions and constrains AI tooling to operate inside a deterministic envelope.
+
+\subsection{What this brief contains}
+
+Page 2 walks through the validation methodology with the formal definitions and operational thresholds. Page 3 walks through the engineering decisions and what was rejected. The full repository (architecture, methodology, demos, and recruiter-facing summaries by role) is at the GitHub URL above.
+
+\newpage
+
+\section{Methodology}
+
+\subsection{Walk-forward validation (Pardo 2008)}
+
+In-sample windows of 60 calendar days are used to fit parameters; the immediately following 20-day out-of-sample windows score them with no re-optimization. Walk-forward efficiency per fold is $\text{WFE} = \text{OOS}_\text{metric} / \text{IS}_\text{metric}$. Operational target: $\text{WFE} > 0.50$ with a tight distribution across folds. Bimodal WFE usually means the strategy depends on a regime present in some folds and not others.
+
+\subsection{Combinatorially Symmetric Cross-Validation (Bailey et al. 2014)}
+
+Build a performance matrix $M$ of shape $(T, N)$ across $T$ time blocks and $N$ strategy configurations. Enumerate all $\binom{T}{T/2}$ symmetric partitions of the $T$ blocks into in-sample and out-of-sample halves. For each partition, pick the IS-best configuration $n^\ast$ and compute its rank quantile $\bar\omega$ in the OOS distribution. The Probability of Backtest Overfitting is
+
+\[
+\text{PBO} = \mathbb{P}\left[\,\ln \frac{\bar\omega}{1 - \bar\omega} \le 0\,\right].
+\]
+
+Operational target: $\text{PBO} < 0.10$. PBO measures the selection process, not any individual strategy. A pure-noise population of strategies reliably produces $\text{PBO} \approx 0.5$, which is the cleanest sanity check on the implementation.
+
+\subsection{Deflated Sharpe Ratio (Bailey \& Lopez de Prado 2014)}
+
+Expected maximum Sharpe under the null hypothesis (no edge) for $N$ independent trials, by the False Strategy Theorem:
+
+\[
+\text{SR}_0 = \sqrt{\mathbb{V}[\hat{\text{SR}}_n]} \cdot \left[(1 - \gamma)\,\Phi^{-1}\!\left(1 - \frac{1}{N}\right) + \gamma\,\Phi^{-1}\!\left(1 - \frac{1}{N e}\right)\right],
+\]
+
+where $\gamma \approx 0.5772$ is the Euler--Mascheroni constant, $e \approx 2.718$, and $\Phi^{-1}$ is the inverse standard-normal CDF. The deflated Sharpe is
+
+\[
+\text{DSR} = \Phi\!\left(\frac{(\text{SR}_\text{obs} - \text{SR}_0)\sqrt{T - 1}}{\sqrt{1 - \hat\gamma_3\,\text{SR}_\text{obs} + \tfrac{\hat\gamma_4 - 1}{4}\,\text{SR}_\text{obs}^2}}\right),
+\]
+
+with $\hat\gamma_3$ and $\hat\gamma_4$ the sample skewness and kurtosis of the returns. Operational target: $\text{DSR} > 0.95$. The expected maximum Sharpe under the null grows roughly with $\sqrt{2 \ln N}$, so at $N = 1{,}000$ trials a Sharpe of 3.7 is the threshold below which a result is statistically indistinguishable from luck.
+
+\subsection{Permutation tests}
+
+Day-block permutation shuffles the order of trading days while preserving intraday bar order, destroying inter-day temporal structure but preserving intraday autocorrelation. Resulting null distribution is the strategy's Sharpe under the hypothesis "the inter-day evolution is permutable." p-value is the fraction of permutations whose Sharpe exceeds the observed Sharpe. Operational target: $p < 0.05$.
+
+\subsection{Parameter stability}
+
+For each parameter, perturb the optimum by $\pm 1$ and $\pm 2$ grid steps. Run a lightweight CSCV on the perturbed configurations and record the mean OOS PnL per neighbor. The stability score is the fraction of one-step neighbors with positive mean OOS PnL. Operational target: $\geq 0.80$. Plateau parameter regions generalize; knife-edge regions do not.
+
+\subsection{Cross-framework parity audits}
+
+The same strategy is implemented in the C\# execution authority and in three independent Python frameworks. Trade lists are diffed trade-by-trade. The most-cited bug class this catches is implicit unit mismatches: futures multipliers, tick values, percent-vs-absolute commissions, share-vs-notional quantities. Each silently scales the answer without raising an error. A strategy is not eligible for paper trading until at least two frameworks agree on its trade list.
+
+\newpage
+
+\section{Engineering decisions}
+
+\subsection{Live execution: C\# / .NET}
+
+Constrained, not preferred. The commercial trading platform exposes a strategy SDK in C\#, so any strategy that runs live runs in C\#. The platform handles broker connectivity, position bookkeeping, and EOD reporting. The C\# layer is single-threaded per backtest and slow for parameter sweeps, which motivates the separate Python research stack.
+
+\subsection{Research and validation: Python}
+
+NumPy, pandas, scipy, Optuna, DEAP, Numba, and matplotlib together cover almost every numerical and statistical need with no commercial license cost. Alternatives considered and rejected: R (weaker general-purpose ecosystem), Julia (smaller ecosystem, weaker AI tooling), C++ (development velocity cost too high for research code).
+
+\subsection{Engine: custom Numba JIT}
+
+A custom Numba-compiled engine runs roughly a thousand backtests per second on a laptop and lets the platform model exactly the execution semantics that the live C\# strategy uses. Off-the-shelf engines either run slower (backtesting.py) or have execution models that diverge from C\# in subtle ways (vectorbt's vectorized fills). Vectorbt and Backtrader implementations exist, but they exist for parity reconciliation, not as the primary engine.
+
+\subsection{Search: Optuna TPE primary, DEAP genetic fallback}
+
+TPE is sample-efficient and handles mixed continuous-discrete spaces. DEAP exists for spaces with discontinuous valid regions (e.g., constraints like $\text{fast} < \text{slow}$ that prune entire grid sections) that TPE struggles with. Grid search and random search were rejected for the obvious reasons.
+
+\subsection{Decision memory: Markdown decision log}
+
+Every hypothesis is logged with hypothesis, change, expected outcome, actual result, verdict, and (if falsified) the parameter region marked as a forbidden region. The log is append-only and consulted before any new hypothesis is acted on. A Markdown file is tool-agnostic, diff-able under git, and survives any change in research tooling. Notion, SQLite databases, per-iteration JSON files, and platform wikis were considered and rejected: each couples the research log to a specific tool.
+
+\subsection{Demo data: synthetic only}
+
+The methodology this repository demonstrates is general; the strategies that exercise it are not. Synthetic data is reproducible by anyone, runs without an API key, and contains no identifying information about the private platform's parameter choices, instrument coverage, or live performance. Public-domain bar data was rejected because a competitor who knows the strategy class could re-run the public demo on the real underlying and back into the platform's parameters.
+
+\subsection{What is still open}
+
+The pure-Python execution stack (bypassing C\# for direct broker connectivity) is a long-term direction with high estimated cost and high estimated benefit. Hardware acceleration (GPU array math) is not implemented because the laptop budget has not run out. Streaming bar ingestion that unifies the research and live code paths is not yet built. These are listed because a portfolio that claims everything works is less credible than one that names what does not.
+
+\vspace{1em}
+{\color{rule}\hrule height 0.5pt}
+\vspace{0.4em}
+
+\noindent\small\sffamily Built by Salman Linjawi. Email: \texttt{linjakid@gmail.com}. Repository: \texttt{github.com/Linja1337/quant-research-platform}.
+
+\end{document}
