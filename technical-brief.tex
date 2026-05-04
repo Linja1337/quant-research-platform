@@ -1,6 +1,6 @@
 \documentclass[10pt,letterpaper]{article}
 
-\usepackage[margin=0.95in]{geometry}
+\usepackage[margin=0.75in,top=0.7in,bottom=0.8in]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
 \usepackage{microtype}
@@ -17,7 +17,9 @@
 
 \titleformat{\section}{\sffamily\bfseries\color{accent}\large}{\thesection.}{0.4em}{}
 \titleformat{\subsection}{\sffamily\bfseries\color{accent}\normalsize}{\thesubsection}{0.4em}{}
-\setlength{\parskip}{0.45em}
+\titlespacing*{\section}{0pt}{0.6em}{0.3em}
+\titlespacing*{\subsection}{0pt}{0.5em}{0.2em}
+\setlength{\parskip}{0.30em}
 \setlength{\parindent}{0pt}
 \renewcommand{\arraystretch}{1.15}
 
@@ -98,33 +100,33 @@ The same strategy is implemented in the C\# execution authority and in three ind
 
 \section{Engineering decisions}
 
-\subsection{Live execution: C\# / .NET}
+\subsection{Live execution: C\# / .NET (constrained, not preferred)}
 
-Constrained, not preferred. The commercial trading platform exposes a strategy SDK in C\#, so any strategy that runs live runs in C\#. The platform handles broker connectivity, position bookkeeping, and EOD reporting. The C\# layer is single-threaded per backtest and slow for parameter sweeps, which motivates the separate Python research stack.
+The commercial trading platform exposes a strategy SDK in C\#, so any strategy that runs live runs in C\#. The C\# layer is single-threaded per backtest and slow for parameter sweeps, which motivates the separate Python research stack.
 
-\subsection{Research and validation: Python}
+\subsection{Research stack: Python}
 
-NumPy, pandas, scipy, Optuna, DEAP, Numba, and matplotlib together cover almost every numerical and statistical need with no commercial license cost. Alternatives considered and rejected: R (weaker general-purpose ecosystem), Julia (smaller ecosystem, weaker AI tooling), C++ (development velocity cost too high for research code).
+NumPy, pandas, scipy, Optuna, DEAP, Numba, and matplotlib cover almost every numerical and statistical need with no commercial license cost. R (weaker general-purpose ecosystem), Julia (smaller ecosystem, weaker AI tooling), and C++ (development velocity cost too high for research code that may change weekly) were considered and rejected.
 
-\subsection{Engine: custom Numba JIT}
+\subsection{Engine: custom Numba JIT, with off-the-shelf frameworks for parity}
 
-A custom Numba-compiled engine runs roughly a thousand backtests per second on a laptop and lets the platform model exactly the execution semantics that the live C\# strategy uses. Off-the-shelf engines either run slower (backtesting.py) or have execution models that diverge from C\# in subtle ways (vectorbt's vectorized fills). Vectorbt and Backtrader implementations exist, but they exist for parity reconciliation, not as the primary engine.
+A custom Numba-compiled engine runs roughly a thousand backtests per second on a laptop and models exactly the execution semantics that the live C\# strategy uses. Off-the-shelf engines either run slower (backtesting.py) or have execution models that diverge from C\# in subtle ways (vectorbt's vectorized fills, Backtrader's broker state machine). Vectorbt and Backtrader implementations exist, but as parity checks against the primary engine, not as the engine itself.
 
 \subsection{Search: Optuna TPE primary, DEAP genetic fallback}
 
-TPE is sample-efficient and handles mixed continuous-discrete spaces. DEAP exists for spaces with discontinuous valid regions (e.g., constraints like $\text{fast} < \text{slow}$ that prune entire grid sections) that TPE struggles with. Grid search and random search were rejected for the obvious reasons.
+TPE is sample-efficient and handles mixed continuous-discrete spaces. DEAP exists for spaces with discontinuous valid regions (constraints like $\text{fast} < \text{slow}$ that prune entire grid sections) where TPE struggles. Grid and random search were rejected for the obvious reasons.
 
-\subsection{Decision memory: Markdown decision log}
+\subsection{Decision memory: Markdown decision log under git}
 
-Every hypothesis is logged with hypothesis, change, expected outcome, actual result, verdict, and (if falsified) the parameter region marked as a forbidden region. The log is append-only and consulted before any new hypothesis is acted on. A Markdown file is tool-agnostic, diff-able under git, and survives any change in research tooling. Notion, SQLite databases, per-iteration JSON files, and platform wikis were considered and rejected: each couples the research log to a specific tool.
+Every hypothesis is logged with hypothesis, change, expected outcome, actual result, verdict, and (if falsified) the parameter region marked as a forbidden region. A Markdown file is tool-agnostic, diff-able, and survives any change in research tooling. Notion, SQLite, per-iteration JSON files, and platform wikis were considered and rejected: each couples the research log to a specific tool.
 
 \subsection{Demo data: synthetic only}
 
-The methodology this repository demonstrates is general; the strategies that exercise it are not. Synthetic data is reproducible by anyone, runs without an API key, and contains no identifying information about the private platform's parameter choices, instrument coverage, or live performance. Public-domain bar data was rejected because a competitor who knows the strategy class could re-run the public demo on the real underlying and back into the platform's parameters.
+The methodology this repository demonstrates is general; the strategies that exercise it are not. Synthetic data is reproducible by anyone, runs without an API key, and contains no identifying information about the private platform's parameter choices or live performance. Public-domain bar data was rejected because a competitor who knows the strategy class could re-run the public demo on the real underlying and back into the platform's parameters.
 
 \subsection{What is still open}
 
-The pure-Python execution stack (bypassing C\# for direct broker connectivity) is a long-term direction with high estimated cost and high estimated benefit. Hardware acceleration (GPU array math) is not implemented because the laptop budget has not run out. Streaming bar ingestion that unifies the research and live code paths is not yet built. These are listed because a portfolio that claims everything works is less credible than one that names what does not.
+The pure-Python execution stack (bypassing C\# for direct broker connectivity), GPU array math for larger sweeps, and streaming bar ingestion that unifies the research and live code paths are all unfinished. Listed because a portfolio that claims everything works is less credible than one that names what does not.
 
 \vspace{1em}
 {\color{rule}\hrule height 0.5pt}
