@@ -5,14 +5,14 @@ responsible use of agentic engineering tools.
 
 ## What to look at first
 
-1. **`docs/agentic-research-process.md`** — how AI assistants are
+1. **`docs/agentic-research-process.md`**, how AI assistants are
    constrained by deterministic validation gates, written rules, and a
    decision log so that they cannot generate fake research.
-2. **`docs/methodology.md`** — the validation gates the AI is constrained
+2. **`docs/methodology.md`**, the validation gates the AI is constrained
    by. Multiple-testing correction, selection-bias adjustment, parameter
    stability, parity audits. The gates exist regardless of whether AI is in
    the loop, but they are what make AI tooling safe to use.
-3. **`docs/decision-log-philosophy.md`** — the persistent memory layer.
+3. **`docs/decision-log-philosophy.md`**, the persistent memory layer.
    AI assistants run in independent sessions, but the project's memory
    lives in a Markdown log that survives any single session. This is what
    stops an assistant from re-proposing a hypothesis the project rejected

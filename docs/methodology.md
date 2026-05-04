@@ -62,7 +62,7 @@ WFE = OOS_metric / IS_metric
 
 Targets:
 
-- WFE > 0.50 — the OOS edge retains at least half its in-sample magnitude.
+- WFE > 0.50. The OOS edge retains at least half its in-sample magnitude.
 - WFE distribution across folds should be tight, not bimodal. Bimodal WFE
   usually means the strategy depends on a regime that appears in some folds
   and not others.
@@ -100,10 +100,10 @@ Algorithm 2.3:
 
 Operational targets:
 
-- PBO < 0.10 — strong evidence the in-sample selection generalizes.
-- PBO between 0.10 and 0.25 — moderate concern, look at parameter stability
+- PBO < 0.10. Strong evidence the in-sample selection generalizes.
+- PBO between 0.10 and 0.25. Moderate concern; look at parameter stability
   and DSR before going further.
-- PBO > 0.50 — the in-sample winner is essentially uninformative about OOS
+- PBO > 0.50. The in-sample winner is essentially uninformative about OOS
   performance. Reject.
 
 CSCV also produces:
@@ -166,11 +166,11 @@ and `skew` and `kurt` are the sample skewness and kurtosis of the returns.
 
 Interpretation:
 
-- DSR > 0.95 — significant at the 5% level after correcting for selection
+- DSR > 0.95. Significant at the 5% level after correcting for selection
   bias and non-normality.
-- DSR > 0.975 — the operational threshold this platform uses for deployment
+- DSR > 0.975. The operational threshold this platform uses for deployment
   consideration.
-- DSR < 0.5 — the observed Sharpe is below the expected maximum under the
+- DSR < 0.5. The observed Sharpe is below the expected maximum under the
   null. Reject.
 
 The headline insight from the formula: the expected maximum Sharpe under the
@@ -202,8 +202,8 @@ permutable."
 p-value = fraction of permutations whose Sharpe is greater than or equal to
 the observed Sharpe. Targets:
 
-- p < 0.05 — typical academic significance threshold.
-- p < 0.01 — preferred for live deployment consideration.
+- p < 0.05 is the typical academic significance threshold.
+- p < 0.01 is preferred for live deployment consideration.
 
 This is a complement to DSR, not a substitute. DSR addresses selection bias
 across the strategy space; permutation addresses signal vs noise within a

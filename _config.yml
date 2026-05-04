@@ -1,0 +1,31 @@
+# GitHub Pages config. The repository's existing Markdown files render as a
+# static site at https://linja1337.github.io/quant-research-platform/.
+# Theme is intentionally restrained.
+
+title: Quantitative Trading Research Platform
+description: A research and validation platform for systematic trading strategies. Built around the assumption that any backtest is overfit until proven otherwise.
+theme: jekyll-theme-cayman
+show_downloads: false
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true
+include:
+  - README.md
+  - LICENSE
+exclude:
+  - _internal/
+  - "*.tex"
+  - "*.aux"
+  - "*.log"
+  - "*.out"
+  - technical-brief.tex
+  - requirements.txt
+  - .gitignore
+defaults:
+  - scope:
+      path: ""
+      type: pages
+    values:
+      layout: default

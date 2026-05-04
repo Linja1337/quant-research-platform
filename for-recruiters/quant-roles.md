@@ -5,18 +5,18 @@ quantitative-research ability.
 
 ## What to look at first
 
-1. **`docs/methodology.md`** — the rigor showcase. Walk-forward validation,
+1. **`docs/methodology.md`**, the rigor showcase. Walk-forward validation,
    Combinatorially Symmetric Cross-Validation (CSCV) and PBO, Deflated
    Sharpe Ratio (DSR), permutation tests, parameter stability surfaces, and
    the gate-composition logic. Plain English at the top of each section,
    formal math below it, references at the bottom.
-2. **`demos/cscv_pbo_demo.py`** — the headline demo. Reproduces Bailey,
+2. **`demos/cscv_pbo_demo.py`**, the headline demo. Reproduces Bailey,
    Borwein, Lopez de Prado, and Zhu (2014) Algorithm 2.3 on a synthetic
    strategy population. Side-by-side comparison of a disciplined search
    (PBO around 0.15) against pure-noise strategies (PBO around 0.5). The
    pure-noise PBO of 0.5 is the textbook null result and the cleanest
    sanity check on the implementation.
-3. **`docs/decision-log-philosophy.md`** — how rejection is institutionalized.
+3. **`docs/decision-log-philosophy.md`**, how rejection is institutionalized.
    The branch tournament tracker, forbidden regions, and the per-iteration
    decision-log template that prevents the project from cycling through the
    same falsified hypotheses every quarter.

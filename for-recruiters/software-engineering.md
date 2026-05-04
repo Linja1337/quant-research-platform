@@ -5,13 +5,13 @@ ability, not finance.
 
 ## What to look at first
 
-1. **`docs/architecture.md`** — the system view. Layered breakdown, why-decisions
+1. **`docs/architecture.md`**, the system view. Layered breakdown, why-decisions
    table, mermaid diagrams of the data flow and the validation pipeline.
-2. **`demos/cscv_pbo_demo.py`** — a self-contained Python module that generates
+2. **`demos/cscv_pbo_demo.py`**, a self-contained Python module that generates
    synthetic data, builds a performance matrix, runs an algorithm with O(C(N, N/2))
    combinatorial complexity, and produces a publication-quality matplotlib figure.
    Run it: `python demos/cscv_pbo_demo.py`.
-3. **`demos/parity_audit_demo.py`** — the demonstration of cross-framework
+3. **`demos/parity_audit_demo.py`**, the demonstration of cross-framework
    reconciliation. Two backtesters, one strategy, the same trade list. The
    bug that this technique catches is one of the cleanest examples of why
    integration testing matters in any system, not just trading.

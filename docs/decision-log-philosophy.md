@@ -66,10 +66,10 @@ this attempt should produce a different result.
 
 In practice this looks like:
 
-- "The HA-flip-as-entry pattern is forbidden — falsified at DSR -12.12 in
+- "The HA-flip-as-entry pattern is forbidden, falsified at DSR -12.12 in
   Iteration 47. Future hypotheses that use HA flip as an entry trigger must
   cite a fundamentally different confirmation architecture."
-- "Re-optimizing strategy 001 as a whole is forbidden — falsified after
+- "Re-optimizing strategy 001 as a whole is forbidden, falsified after
   9,553 parameter combinations in the original sweep failed Monte Carlo.
   Future work on strategy 001 must decompose it into atomic components and
   validate each independently."

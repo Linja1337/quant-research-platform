@@ -1,5 +1,5 @@
 """
-CSCV / PBO demo — Combinatorially Symmetric Cross-Validation.
+CSCV / PBO demo. Combinatorially Symmetric Cross-Validation.
 
 What this shows
 ---------------
@@ -23,7 +23,7 @@ Run
 
 Output
 ------
-demos/output/cscv_pbo.png  — the figure embedded in the README
+demos/output/cscv_pbo.png is the figure embedded in the README.
 Console: PBO, mean WFE, performance-degradation slope, and a one-line verdict.
 """
 from __future__ import annotations
@@ -112,7 +112,7 @@ def cscv(M: np.ndarray, truth: np.ndarray) -> dict:
     pbo = float(np.mean(logits <= 0))
 
     # Per-strategy OOS performance averaged over the splits where the strategy
-    # is in the OOS half — this is the conventional "OOS rank stability" view.
+    # is in the OOS half. This is the conventional "OOS rank stability" view.
     oos_avg_rank = np.zeros(N)
     oos_count = np.zeros(N)
     for is_idx in splits:
@@ -287,10 +287,10 @@ def main() -> None:
     print("  Only the search discipline differs.")
     print()
     print("  Top row    Small parameter window, mostly chosen by hypothesis.")
-    print("             PBO falls below 0.10 -- the IS winner generalizes OOS.")
+    print("             PBO falls below 0.10. The IS winner generalizes OOS.")
     print()
     print("  Bottom row Large grid of mostly arbitrary configurations.")
-    print("             PBO rises sharply -- the IS winner is usually noise that")
+    print("             PBO rises sharply. The IS winner is usually noise that")
     print("             happened to fit the in-sample half. This is what")
     print("             multiple-testing bias looks like in practice.")
 
