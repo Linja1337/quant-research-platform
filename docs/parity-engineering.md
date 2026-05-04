@@ -60,9 +60,12 @@ warning, no obvious symptom. The equity curve looks plausible. It is just
 50 times smaller than it should be.
 
 A strategy whose true expected Sharpe is 1.5 ends up with an apparent
-Sharpe near zero. A strategy whose true expected drawdown is $5,000 looks
-like a $100 drawdown. Decisions get made on those numbers. They are wrong
-in different directions for different strategies.
+Sharpe near zero. In the synthetic example reproduced in
+`demos/parity_audit_demo.py`, the apparent equity curve ends up exactly
+1/50 the size of the correct one. A real strategy carrying a 50x point
+multiplier and left at the framework default would scale identically.
+Decisions get made on those numbers. They are wrong in different
+directions for different strategies.
 
 The same bug class shows up across frameworks under different names: tick
 sizes vs point values, percent commissions vs absolute commissions, share

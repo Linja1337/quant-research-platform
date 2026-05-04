@@ -257,9 +257,11 @@ investigated until reconciled.
 The most-cited example from this work, sanitized for the demo: Backtrader's
 default `CommInfoBase` uses a contract multiplier of 1.0. For a futures
 contract with a $50 point multiplier, this silently makes a one-point price
-move look like $1 of P&L instead of $50. A strategy that should have a $5,000
-Sharpe-per-year impact looks like $100. Without a parity audit, you would not
-notice.
+move look like $1 of P&L instead of $50. In the synthetic example
+reproduced in `demos/parity_audit_demo.py`, the apparent equity curve ends
+up exactly 1/50 the size of the correct one. A real strategy carrying a
+50x point multiplier and left at the framework default would scale
+identically. Without a parity audit, you would not notice.
 
 The demo at `demos/parity_audit_demo.py` reproduces this class of bug on
 synthetic data and shows the trade-list reconciliation procedure that
