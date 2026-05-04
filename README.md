@@ -43,7 +43,6 @@ code, real parameters, and trade logs are in a separate private repository.
   thousand backtests per second on a laptop. That is what makes 200-trial
   Optuna sweeps and 80-configuration CSCV grids feasible without a cluster.
 
-## Hiring for a specific role?
 
 - [Software Engineering](for-recruiters/software-engineering.md)
 - [Quant / Quantitative Research](for-recruiters/quant-roles.md)
