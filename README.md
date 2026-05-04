@@ -141,4 +141,7 @@ values, and no real PnL numbers anywhere in the public artifacts.
 
 Built by Salman Linjawi.
 GitHub: [Linja1337](https://github.com/Linja1337)
-Email: linjakid@gmail.com
+Email: s-linjawi@outlook.com
+
+
+
