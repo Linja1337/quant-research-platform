@@ -178,6 +178,10 @@ null grows roughly with `sqrt(2 * ln(N))`. If you tested 1,000 strategies, the
 "impressive" Sharpe you would expect from pure luck is around 3.7. Anything
 below that bar is statistically indistinguishable from noise.
 
+For a treatment of the broader multiple-testing problem in factor investing,
+where similar selection-bias dynamics inflate published Sharpe ratios across
+the academic finance literature, see Harvey, Liu, and Zhu (2016).
+
 ### Why DSR matters more than Sharpe
 
 A junior portfolio that reports "my strategy has Sharpe 3.0" without naming
