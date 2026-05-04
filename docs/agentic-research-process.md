@@ -138,27 +138,4 @@ session is already audit-ready.
 The trade is between session-level velocity and project-level velocity.
 The platform optimizes for project-level.
 
-## What this discipline does not claim
 
-It does not claim that AI tooling is dangerous and should be avoided. It
-is used, daily, and the research velocity gain is real.
-
-It does not claim the discipline catches every error. AI assistants and
-human researchers both make mistakes the gates do not catch. The
-discipline reduces the rate, not to zero.
-
-It does not claim that the platform is uniquely virtuous. Other research
-groups apply similar disciplines under different names. The point is that
-*some* such discipline is necessary if AI tooling is in the loop, and the
-platform has chosen this one.
-
-## The summary for AI / ML hiring
-
-If your interview question is "how do you use AI in your research
-workflow," this document is the answer. AI is a power tool. The validation
-gates and the decision log are the guards on the tool. The combination is
-faster than either piece alone and safer than the AI alone.
-
-That is the right framing for 2026 hiring. "I use AI" without the rest is
-a yellow flag. "I do not use AI" without the rest is a different yellow
-flag. The signal is the discipline.
