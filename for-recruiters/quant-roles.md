@@ -57,7 +57,7 @@ quantitative-research ability.
 ## Twenty-minute self-guided walk
 
 1. `README.md` for the framing.
-2. `docs/methodology.md` end-to-end. This is the substantive document.
+2. `docs/methodology.md` from start to finish. This is the substantive document.
 3. `demos/cscv_pbo_demo.py`. Read the code, then run it.
 4. `demos/parameter_stability_demo.py` (Tier 2 build). Read it, run it.
 5. `docs/parity-engineering.md` for the cross-framework reconciliation

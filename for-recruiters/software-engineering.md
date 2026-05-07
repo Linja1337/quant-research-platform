@@ -37,7 +37,7 @@ ability, not finance.
 
 ## What this repository does not show
 
-- Web frameworks, mobile, or full-stack delivery. Other projects in
+- Web frameworks, mobile, or browser-side delivery. Other projects in
   `github.com/Linja1337` cover those.
 - Microservice orchestration, Kubernetes, cloud infra. The platform is a
   research engine; deployment is single-host.
