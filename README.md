@@ -115,7 +115,7 @@ threshold this platform uses.
 ```
 git clone https://github.com/Linja1337/quant-research-platform
 cd quant-research-platform
-pip install -r requirements.txt
+pip install -e .
 python demos/cscv_pbo_demo.py
 ```
 
@@ -123,6 +123,10 @@ The script runs in a few seconds. It writes the hero chart at the top of
 this README to `demos/output/cscv_pbo.png`. The
 [demos/](demos/) folder contains four more self-contained demonstrations of
 the validation methodology, each on synthetic data.
+
+Methodology lives in [`src/quant_platform/`](src/quant_platform/), with
+tests in [`tests/`](tests/). The demos in `demos/` are thin scripts that
+import from the library and produce the charts shown in this README.
 
 ## About the code
 

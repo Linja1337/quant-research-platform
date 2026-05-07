@@ -6,21 +6,21 @@ external code can import and run the same primitives.
 
 ## What is here
 
-- `validation.cscv` — Combinatorially Symmetric Cross-Validation and the
+- `validation.cscv`: Combinatorially Symmetric Cross-Validation and the
   Probability of Backtest Overfitting (Bailey, Borwein, Lopez de Prado,
   Zhu 2014, Algorithm 2.3).
-- `validation.dsr` — Deflated Sharpe Ratio and the False Strategy Theorem
+- `validation.dsr`: Deflated Sharpe Ratio and the False Strategy Theorem
   (Bailey and Lopez de Prado 2014).
-- `validation.walk_forward` — anchored fold-index generator and the
+- `validation.walk_forward`: anchored fold-index generator and the
   walk-forward efficiency definition (Pardo 2008).
-- `validation.permutation` — day-block shuffle and a generic permutation
+- `validation.permutation`: day-block shuffle and a generic permutation
   test driver that accepts any scalar statistic.
-- `validation.stability` — parameter-surface stability scoring around
+- `validation.stability`: parameter-surface stability scoring around
   the optimum cell.
-- `parity.reconciler` — trade-list diff for cross-framework parity audits.
-- `parity.synthetic` — regime-switching OHLC generator and a synthetic
+- `parity.reconciler`: trade-list diff for cross-framework parity audits.
+- `parity.synthetic`: regime-switching OHLC generator and a synthetic
   strategy population used to drive the demos deterministically.
-- `strategies.sma_crossover` — reference SMA crossover signal generator,
+- `strategies.sma_crossover`: reference SMA crossover signal generator,
   used as the worked example in every demo.
 
 ## Quick start

@@ -333,7 +333,7 @@ research process.
 To be honest about the limits.
 
 - **It does not estimate live drawdowns.** All of these tests measure
-  selection bias and statistical robustness on historical data. Live drawdowns
+  selection bias and statistical soundness on historical data. Live drawdowns
   depend on regime changes that the historical data may not contain.
 - **It does not replace position-sizing or risk-management.** The methodology
   is about whether a signal is real, not about how to size a bet on it.
