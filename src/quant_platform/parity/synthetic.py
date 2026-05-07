@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from quant_platform.strategies.sma_crossover import compute_signals
+
 
 def regime_switching_ohlc(
     n_bars: int = 5_000,
@@ -86,15 +88,19 @@ class StrategyConfig:
         return self._sma_pnl(close)
 
     def _sma_pnl(self, close: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Long when fast SMA > slow SMA, flat otherwise. No costs."""
+        """Long when fast SMA > slow SMA, flat otherwise. No costs.
+
+        Delegates signal generation to strategies.sma_crossover and
+        clips the (-1, 0, +1) signal to long-only by taking the maximum
+        with zero. The clip preserves the legacy long-only behavior of
+        the synthetic demo while keeping the strategy module's public
+        contract general.
+        """
         if self.fast >= self.slow or self.slow >= len(close):
             return np.zeros(len(close)), np.array([], dtype=int)
 
-        fast_sma = _rolling_mean(close, self.fast)
-        slow_sma = _rolling_mean(close, self.slow)
-        long_signal = (fast_sma > slow_sma).astype(int)
-        position = np.roll(long_signal, 1)
-        position[0] = 0
+        signals = compute_signals(close, self.fast, self.slow)
+        position = np.maximum(signals, 0)
 
         bar_returns = np.zeros(len(close))
         bar_returns[1:] = (close[1:] - close[:-1]) / close[:-1]
@@ -110,19 +116,6 @@ class StrategyConfig:
         bar_returns = np.zeros(len(close))
         bar_returns[1:] = (close[1:] - close[:-1]) / close[:-1]
         return rng.normal(loc=0.0, scale=bar_returns.std() * 0.6, size=len(close))
-
-
-def _rolling_mean(arr: np.ndarray, window: int) -> np.ndarray:
-    """Trailing mean. Output bars 0..window-2 are filled with arr[0] so
-    the array stays the same length as the input. Demos only use bars
-    where both the fast and slow SMAs are defined, so the warmup region
-    is harmless."""
-    if window <= 1:
-        return arr.copy()
-    csum = np.cumsum(np.concatenate([[0.0], arr]))
-    out = (csum[window:] - csum[:-window]) / window
-    pad = np.full(window - 1, arr[0])
-    return np.concatenate([pad, out])
 
 
 def synthetic_population(
