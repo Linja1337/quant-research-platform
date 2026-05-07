@@ -46,3 +46,7 @@ docs/site/.parcel-cache/
 # Temp
 *.tmp
 *.bak
+
+# Working notes for README/diagram generation, never committed
+_internal/
+_bundle.txt
