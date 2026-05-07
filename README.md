@@ -96,8 +96,7 @@ by the pytest suite under [`tests/`](tests/).
   generalizes: it is what an Architecture Decision Record (ADR) looks
   like when applied to research instead of architecture.
 
-## Hiring for a specific role?
-
+Interested in: 
 - [Software Engineering](for-recruiters/software-engineering.md)
 - [Quant / Quantitative Research](for-recruiters/quant-roles.md)
 - [AI / ML](for-recruiters/ai-ml-roles.md)
