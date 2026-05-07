@@ -14,6 +14,7 @@ That contrast is the visual signature of a working permutation test.
 
 Run
 ---
+    pip install -e .
     python demos/permutation_test_demo.py
 
 Output
@@ -28,7 +29,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from _synthetic import StrategyConfig, generate_ohlc
+from quant_platform.parity.synthetic import StrategyConfig, regime_switching_ohlc
+from quant_platform.validation.dsr import sharpe_ratio
+from quant_platform.validation.permutation import day_block_permutation_test
 
 OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,31 +41,7 @@ N_PERMUTATIONS = 500
 BARS_PER_DAY = 78
 
 
-def per_bar_sharpe(per_bar_pnl: np.ndarray) -> float:
-    if per_bar_pnl.std() < 1e-12:
-        return 0.0
-    return float(per_bar_pnl.mean() / per_bar_pnl.std())
-
-
-def day_shuffled_close(close: np.ndarray, rng: np.random.Generator) -> np.ndarray:
-    """Shuffle the order of trading days while preserving intraday bar order."""
-    n_days = len(close) // BARS_PER_DAY
-    usable = n_days * BARS_PER_DAY
-    truncated = close[:usable]
-    days = truncated.reshape(n_days, BARS_PER_DAY)
-    indices = np.arange(n_days)
-    rng.shuffle(indices)
-    shuffled = days[indices]
-    # Re-stitch so prices are continuous: each new "day" starts at the
-    # previous day's close, preserving the within-day shape.
-    out = shuffled.copy()
-    for i in range(1, n_days):
-        out[i] = out[i] + (out[i - 1, -1] - out[i, 0])
-    return out.flatten()
-
-
 def edge_strategy_pnl(close: np.ndarray, fast: int, slow: int) -> np.ndarray:
-    """SMA crossover. Captures regime drift when present in the data."""
     cfg = StrategyConfig(fast=fast, slow=slow, kind="sma")
     pnl, _ = cfg.trades(close)
     return pnl
@@ -75,25 +54,6 @@ def placebo_strategy_pnl(close: np.ndarray, rng: np.random.Generator) -> np.ndar
     bar_returns[1:] = (close[1:] - close[:-1]) / close[:-1]
     scale = max(float(np.std(bar_returns)), 1e-9)
     return rng.normal(loc=0.0, scale=scale * 0.5, size=len(close))
-
-
-def permutation_p_value(
-    pnl_fn,
-    close: np.ndarray,
-    n_permutations: int,
-    seed: int,
-) -> tuple[float, float, np.ndarray]:
-    """Run a permutation test. pnl_fn(close) returns the per-bar PnL."""
-    observed = per_bar_sharpe(pnl_fn(close))
-
-    rng = np.random.default_rng(seed)
-    null = np.empty(n_permutations)
-    for i in range(n_permutations):
-        shuffled = day_shuffled_close(close, rng)
-        null[i] = per_bar_sharpe(pnl_fn(shuffled))
-
-    p_value = float(np.mean(null >= observed))
-    return observed, p_value, null
 
 
 def plot(
@@ -160,20 +120,28 @@ def _style(ax, text_color: str) -> None:
 
 def main() -> None:
     print("Generating synthetic OHLC...")
-    bars = generate_ohlc(n_bars=N_BARS, seed=42)
+    bars = regime_switching_ohlc(n_bars=N_BARS, seed=42)
     close = bars["close"]
 
     print(f"Running {N_PERMUTATIONS} permutations on the edge strategy...")
-    edge_obs, edge_p, edge_null = permutation_p_value(
-        lambda c: edge_strategy_pnl(c, fast=8, slow=30),
-        close, N_PERMUTATIONS, seed=11,
+    edge_obs, edge_p, edge_null = day_block_permutation_test(
+        pnl_fn=lambda c: edge_strategy_pnl(c, fast=8, slow=30),
+        statistic_fn=sharpe_ratio,
+        close=close,
+        bars_per_day=BARS_PER_DAY,
+        n_permutations=N_PERMUTATIONS,
+        seed=11,
     )
 
     print(f"Running {N_PERMUTATIONS} permutations on the placebo...")
     placebo_rng = np.random.default_rng(99)
-    placebo_obs, placebo_p, placebo_null = permutation_p_value(
-        lambda c: placebo_strategy_pnl(c, placebo_rng),
-        close, N_PERMUTATIONS, seed=11,
+    placebo_obs, placebo_p, placebo_null = day_block_permutation_test(
+        pnl_fn=lambda c: placebo_strategy_pnl(c, placebo_rng),
+        statistic_fn=sharpe_ratio,
+        close=close,
+        bars_per_day=BARS_PER_DAY,
+        n_permutations=N_PERMUTATIONS,
+        seed=11,
     )
 
     out_path = OUT_DIR / "permutation.png"

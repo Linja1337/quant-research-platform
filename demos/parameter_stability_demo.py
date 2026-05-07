@@ -16,6 +16,7 @@ one point in the grid.
 
 Run
 ---
+    pip install -e .
     python demos/parameter_stability_demo.py
 
 Output
@@ -31,7 +32,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from _synthetic import StrategyConfig, generate_ohlc
+from quant_platform.parity.synthetic import StrategyConfig, regime_switching_ohlc
+from quant_platform.validation.stability import parameter_stability_score
 
 OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -68,30 +70,10 @@ def knife_edge_surface(close: np.ndarray) -> np.ndarray:
             if fast >= slow:
                 continue
             d2 = (fast - target_fast) ** 2 + 0.5 * (slow - target_slow) ** 2
-            # Sharp positive spike at the target, negative everywhere else.
             spike = plateau_max * 1.6 * np.exp(-d2 * 2.0)
             baseline = -plateau_max * 0.55
             surface[i, j] = spike + baseline
     return surface
-
-
-def stability_score(surface: np.ndarray) -> tuple[float, tuple[int, int]]:
-    """Find the maximum cell. Return the fraction of one-step neighbors
-    (up to 4 of them) that are also profitable, and the (i, j) location."""
-    masked = np.where(np.isnan(surface), -np.inf, surface)
-    flat = masked.argmax()
-    i_star, j_star = np.unravel_index(flat, surface.shape)
-    neighbors: list[float] = []
-    for di, dj in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-        i, j = i_star + di, j_star + dj
-        if 0 <= i < surface.shape[0] and 0 <= j < surface.shape[1]:
-            v = surface[i, j]
-            if not np.isnan(v):
-                neighbors.append(v)
-    if not neighbors:
-        return float("nan"), (i_star, j_star)
-    profitable = sum(1 for v in neighbors if v > 0)
-    return profitable / len(neighbors), (i_star, j_star)
 
 
 def plot(plateau: np.ndarray, knife: np.ndarray, out_path: Path) -> None:
@@ -103,20 +85,18 @@ def plot(plateau: np.ndarray, knife: np.ndarray, out_path: Path) -> None:
     text_color = "#111827"
 
     extent = [SLOW_GRID[0], SLOW_GRID[-1], FAST_GRID[-1], FAST_GRID[0]]
-
-    # Symmetric color scale around zero, share the limits across both panels.
     vmax = max(np.nanmax(np.abs(plateau)), np.nanmax(np.abs(knife)))
 
     for ax, surface, title in (
         (ax_left, plateau, "Plateau strategy (SMA crossover)"),
         (ax_right, knife, "Knife-edge strategy (constructed)"),
     ):
-        score, (i_star, j_star) = stability_score(surface)
+        result = parameter_stability_score(surface)
+        i_star, j_star = result.optimum_index
         im = ax.imshow(
             surface, cmap="RdBu_r", vmin=-vmax, vmax=vmax,
             aspect="auto", extent=extent, interpolation="nearest",
         )
-        # Mark the optimum.
         opt_fast = FAST_GRID[i_star]
         opt_slow = SLOW_GRID[j_star]
         ax.plot(opt_slow, opt_fast, marker="o", markersize=10,
@@ -126,7 +106,7 @@ def plot(plateau: np.ndarray, knife: np.ndarray, out_path: Path) -> None:
         ax.set_ylabel("fast SMA window", color=text_color)
         ax.set_title(
             f"{title}    optimum at ({opt_fast}, {opt_slow})\n"
-            f"stability score = {score:.2f} of neighbors profitable",
+            f"stability score = {result.score:.2f} of neighbors profitable",
             loc="left", color=text_color, fontsize=11, weight="bold", pad=8,
         )
         ax.tick_params(colors=text_color, length=4)
@@ -151,7 +131,7 @@ def plot(plateau: np.ndarray, knife: np.ndarray, out_path: Path) -> None:
 
 def main() -> None:
     print("Generating synthetic OHLC...")
-    bars = generate_ohlc(n_bars=8_000, seed=42)
+    bars = regime_switching_ohlc(n_bars=8_000, seed=42)
     close = bars["close"]
 
     print("Computing plateau surface...")
@@ -159,8 +139,8 @@ def main() -> None:
     print("Computing knife-edge surface...")
     knife = knife_edge_surface(close)
 
-    plateau_score, plateau_opt = stability_score(plateau)
-    knife_score, knife_opt = stability_score(knife)
+    plateau_result = parameter_stability_score(plateau)
+    knife_result = parameter_stability_score(knife)
 
     out_path = OUT_DIR / "parameter_stability.png"
     plot(plateau, knife, out_path)
@@ -169,12 +149,14 @@ def main() -> None:
     print("Result")
     print("------")
     print(f"  Plateau strategy")
-    print(f"    optimum (fast, slow)         ({FAST_GRID[plateau_opt[0]]}, {SLOW_GRID[plateau_opt[1]]})")
-    print(f"    stability score              {plateau_score:.2f}    target > 0.80")
+    print(f"    optimum (fast, slow)         "
+          f"({FAST_GRID[plateau_result.optimum_index[0]]}, {SLOW_GRID[plateau_result.optimum_index[1]]})")
+    print(f"    stability score              {plateau_result.score:.2f}    target > 0.80")
     print()
     print(f"  Knife-edge strategy")
-    print(f"    optimum (fast, slow)         ({FAST_GRID[knife_opt[0]]}, {SLOW_GRID[knife_opt[1]]})")
-    print(f"    stability score              {knife_score:.2f}    target > 0.80")
+    print(f"    optimum (fast, slow)         "
+          f"({FAST_GRID[knife_result.optimum_index[0]]}, {SLOW_GRID[knife_result.optimum_index[1]]})")
+    print(f"    stability score              {knife_result.score:.2f}    target > 0.80")
     print()
     print(f"  Chart written to               {out_path.relative_to(out_path.parents[2])}")
 

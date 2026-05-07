@@ -19,26 +19,29 @@ Overfitting." SSRN 2326253. Algorithm 2.3.
 
 Run
 ---
+    pip install -e .
     python demos/cscv_pbo_demo.py
 
 Output
 ------
 demos/output/cscv_pbo.png is the figure embedded in the README.
-Console: PBO, mean WFE, performance-degradation slope, and a one-line verdict.
+Console: PBO and a one-line verdict for each scenario.
 """
 from __future__ import annotations
 
-import itertools
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import spearmanr
 
-from _synthetic import (
-    aggregate_per_block_pnl,
-    generate_ohlc,
+from quant_platform.parity.synthetic import (
+    regime_switching_ohlc,
     synthetic_population,
+)
+from quant_platform.validation.cscv import (
+    CSCVResult,
+    aggregate_per_block_pnl,
+    compute_pbo,
 )
 
 OUT_DIR = Path(__file__).resolve().parent / "output"
@@ -46,12 +49,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 N_BARS = 6_000
 N_BLOCKS = 8  # C(8, 4) = 70 symmetric partitions.
-
-# Two same-size populations. Only the signal quality differs. Same N keeps PBO
-# comparisons fair (PBO has a known dependence on the number of trials).
 N_PER_POP = 80
-DISCIPLINED = {"n_signal": N_PER_POP, "n_noise": 0, "label": "disciplined search"}
-DATA_MINED = {"n_signal": 0, "n_noise": N_PER_POP, "label": "data-mined search"}
 
 
 def build_performance_matrix(
@@ -61,90 +59,14 @@ def build_performance_matrix(
 ) -> np.ndarray:
     """M[t, n] = aggregate PnL of config n during time block t."""
     close = bars["close"]
-    n_configs = len(configs)
-    M = np.empty((n_blocks, n_configs))
+    M = np.empty((n_blocks, len(configs)))
     for n, cfg in enumerate(configs):
         per_bar_pnl, _ = cfg.trades(close)
         M[:, n] = aggregate_per_block_pnl(per_bar_pnl, n_blocks)
     return M
 
 
-def cscv(M: np.ndarray, truth: np.ndarray) -> dict:
-    """
-    Run Bailey-Lopez de Prado CSCV on a (T, N) performance matrix.
-
-    For each symmetric IS/OOS split, picks the IS-best strategy and records
-    where it lands in the OOS performance distribution. PBO is the fraction
-    of splits where that IS-best ranks at or below the OOS median.
-
-    truth is the per-strategy ground-truth label (signal vs noise) used only
-    for the right-panel coloring; the CSCV itself is truth-blind.
-    """
-    T, N = M.shape
-    half = T // 2
-    splits = list(itertools.combinations(range(T), half))
-
-    logits = np.empty(len(splits))
-    winner_oos_quantile = np.empty(len(splits))
-    winner_was_signal = np.empty(len(splits), dtype=bool)
-    full_is_perf = M.sum(axis=0)
-    full_is_rank = full_is_perf.argsort().argsort() + 1
-
-    for k, is_idx in enumerate(splits):
-        oos_idx = [t for t in range(T) if t not in is_idx]
-        is_perf = M[list(is_idx)].sum(axis=0)
-        oos_perf = M[list(oos_idx)].sum(axis=0)
-
-        # Pick in-sample best.
-        n_star = int(np.argmax(is_perf))
-
-        # omega_bar: where the IS-best lands in the OOS distribution.
-        # rank from 1 (worst) to N (best); divide by N+1 to get (0, 1).
-        oos_ranks = oos_perf.argsort().argsort() + 1
-        rank_n_star = int(oos_ranks[n_star])
-        omega = rank_n_star / (N + 1)
-        omega_safe = float(np.clip(omega, 1e-6, 1 - 1e-6))
-        logits[k] = np.log(omega_safe / (1 - omega_safe))
-
-        winner_oos_quantile[k] = omega
-        winner_was_signal[k] = bool(truth[n_star])
-
-    pbo = float(np.mean(logits <= 0))
-
-    # Per-strategy OOS performance averaged over the splits where the strategy
-    # is in the OOS half. This is the conventional "OOS rank stability" view.
-    oos_avg_rank = np.zeros(N)
-    oos_count = np.zeros(N)
-    for is_idx in splits:
-        oos_idx = [t for t in range(T) if t not in is_idx]
-        oos_perf = M[list(oos_idx)].sum(axis=0)
-        ranks = oos_perf.argsort().argsort() + 1
-        oos_avg_rank += ranks
-        oos_count += 1
-    oos_avg_rank /= oos_count
-
-    rho, _ = spearmanr(full_is_rank, oos_avg_rank)
-
-    return {
-        "pbo": pbo,
-        "logits": logits,
-        "winner_oos_quantile": winner_oos_quantile,
-        "winner_was_signal": winner_was_signal,
-        "full_is_rank": full_is_rank,
-        "oos_avg_rank": oos_avg_rank,
-        "spearman_rho": float(rho),
-        "n_splits": len(splits),
-        "pct_winners_signal": float(winner_was_signal.mean()),
-    }
-
-
-def plot(disciplined: dict, data_mined: dict, out_path: Path) -> None:
-    """
-    Hero figure. Two rows. Top = disciplined parameter search; bottom = data-
-    mined search. Each row has a logit-distribution histogram (left) and a
-    where-did-the-IS-winner-land-OOS scatter (right). Shared x and y so the
-    two rows are visually comparable.
-    """
+def plot(disciplined: CSCVResult, data_mined: CSCVResult, out_path: Path) -> None:
     plt.style.use("default")
     fig, axes = plt.subplots(
         2, 2, figsize=(13, 8.4),
@@ -165,29 +87,26 @@ def plot(disciplined: dict, data_mined: dict, out_path: Path) -> None:
     ]
 
     for row_title, result, color, ax_left, ax_right in rows:
-        # Left: logit histogram.
-        logits = result["logits"]
         ax_left.hist(
-            logits, bins=20, color=color, alpha=0.85,
+            result.logits, bins=20, color=color, alpha=0.85,
             edgecolor="white", linewidth=0.8,
         )
         ax_left.axvline(0, color=accent_line, linestyle="--", linewidth=1.2, label="logit = 0")
         ax_left.set_xlabel("logit(omega_bar)", color=text_color, fontsize=10)
         ax_left.set_ylabel("number of CSCV splits", color=text_color, fontsize=10)
-        verdict = _pbo_verdict(result["pbo"])
+        verdict = _pbo_verdict(result.pbo)
         ax_left.set_title(
-            f"PBO = {result['pbo']:.3f}    {verdict}",
+            f"PBO = {result.pbo:.3f}    {verdict}",
             color=text_color, fontsize=11, loc="left", pad=8,
         )
         ax_left.legend(frameon=False, loc="upper right", fontsize=9)
         _style_axes(ax_left, text_color)
 
-        # Right: per-split scatter of IS-winner OOS quantile.
-        n_splits = len(result["winner_oos_quantile"])
+        n_splits = result.n_splits
         rng = np.random.default_rng(11)
         x_jitter = rng.uniform(-0.4, 0.4, size=n_splits)
         ax_right.scatter(
-            x_jitter, result["winner_oos_quantile"],
+            x_jitter, result.winner_oos_quantile,
             s=44, color=color, alpha=0.85,
             edgecolor="white", linewidth=0.6,
         )
@@ -200,7 +119,7 @@ def plot(disciplined: dict, data_mined: dict, out_path: Path) -> None:
             color=text_color, fontsize=10,
         )
         ax_right.set_ylabel("OOS quantile of the IS-winner   (1.0 = best of N)", color=text_color, fontsize=10)
-        below_median = float(np.mean(result["winner_oos_quantile"] <= 0.5))
+        below_median = float(np.mean(result.winner_oos_quantile <= 0.5))
         ax_right.set_title(
             f"{below_median * 100:.0f}% of IS-winners landed at or below the OOS median",
             color=text_color, fontsize=11, loc="left", pad=8,
@@ -208,7 +127,6 @@ def plot(disciplined: dict, data_mined: dict, out_path: Path) -> None:
         ax_right.legend(frameon=False, loc="lower left", fontsize=9)
         _style_axes(ax_right, text_color)
 
-        # Row banner above the two panels.
         fig.text(
             0.06, ax_left.get_position().y1 + 0.04,
             row_title, fontsize=12, color=text_color, weight="bold", ha="left",
@@ -249,24 +167,22 @@ def _style_axes(ax, text_color: str) -> None:
     ax.set_axisbelow(True)
 
 
-def _run_scenario(bars, n_signal: int, n_noise: int, label: str) -> dict:
+def _run_scenario(bars, n_signal: int, n_noise: int, label: str) -> CSCVResult:
     print(f"  [{label}] population: {n_signal} signal, {n_noise} noise")
-    configs, truth = synthetic_population(n_signal=n_signal, n_noise=n_noise)
+    configs, _ = synthetic_population(n_signal=n_signal, n_noise=n_noise)
     M = build_performance_matrix(bars, configs, N_BLOCKS)
-    return cscv(M, truth)
+    return compute_pbo(M)
 
 
 def main() -> None:
     print("Generating synthetic OHLC bars (regime-switching trend)...")
-    bars = generate_ohlc(n_bars=N_BARS, seed=42)
+    bars = regime_switching_ohlc(n_bars=N_BARS, seed=42)
 
     print(f"Running CSCV on two contrasting strategy populations "
           f"(C({N_BLOCKS}, {N_BLOCKS // 2}) = 70 splits each)")
     print()
-    disciplined = _run_scenario(bars, **{k: v for k, v in DISCIPLINED.items() if k != "label"},
-                                 label=DISCIPLINED["label"])
-    data_mined = _run_scenario(bars, **{k: v for k, v in DATA_MINED.items() if k != "label"},
-                                label=DATA_MINED["label"])
+    disciplined = _run_scenario(bars, n_signal=N_PER_POP, n_noise=0, label="disciplined search")
+    data_mined = _run_scenario(bars, n_signal=0, n_noise=N_PER_POP, label="data-mined search")
 
     out_path = OUT_DIR / "cscv_pbo.png"
     plot(disciplined, data_mined, out_path)
@@ -274,10 +190,10 @@ def main() -> None:
     print()
     print("Result")
     print("------")
-    print(f"  Disciplined search   PBO = {disciplined['pbo']:.3f}    "
-          f"({_pbo_verdict(disciplined['pbo'])})")
-    print(f"  Data-mined search    PBO = {data_mined['pbo']:.3f}    "
-          f"({_pbo_verdict(data_mined['pbo'])})")
+    print(f"  Disciplined search   PBO = {disciplined.pbo:.3f}    "
+          f"({_pbo_verdict(disciplined.pbo)})")
+    print(f"  Data-mined search    PBO = {data_mined.pbo:.3f}    "
+          f"({_pbo_verdict(data_mined.pbo)})")
     print()
     print(f"  Chart written to     {out_path.relative_to(out_path.parents[2])}")
     print()

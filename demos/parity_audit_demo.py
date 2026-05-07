@@ -15,6 +15,7 @@ The bug is silent (no exception, no warning) and the result it produces is
 
 Run
 ---
+    pip install -e .
     python demos/parity_audit_demo.py
 
 Output
@@ -25,13 +26,17 @@ fixed version.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from _synthetic import generate_ohlc
+from quant_platform.parity.reconciler import (
+    Trade,
+    equity_curve,
+    reconcile_trade_lists,
+)
+from quant_platform.parity.synthetic import regime_switching_ohlc
 
 OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -40,18 +45,7 @@ POINT_MULTIPLIER = 50.0
 COMMISSION_PER_SIDE = 3.0
 
 
-@dataclass(frozen=True)
-class Trade:
-    entry_idx: int
-    exit_idx: int
-    entry_price: float
-    exit_price: float
-
-    def points(self) -> float:
-        return self.exit_price - self.entry_price
-
-
-def sma(arr: np.ndarray, window: int) -> np.ndarray:
+def _sma(arr: np.ndarray, window: int) -> np.ndarray:
     csum = np.cumsum(np.concatenate([[0.0], arr]))
     out = (csum[window:] - csum[:-window]) / window
     pad = np.full(window - 1, arr[0])
@@ -61,8 +55,8 @@ def sma(arr: np.ndarray, window: int) -> np.ndarray:
 def detect_trades(close: np.ndarray, fast: int = 8, slow: int = 30) -> list[Trade]:
     """Long when fast SMA crosses above slow SMA, exit on the reverse cross.
     Trades are evaluated on bar close, filled at the next bar's open."""
-    fast_sma = sma(close, fast)
-    slow_sma = sma(close, slow)
+    fast_sma = _sma(close, fast)
+    slow_sma = _sma(close, slow)
     long_signal = (fast_sma > slow_sma).astype(int)
     transitions = np.diff(np.concatenate([[0], long_signal, [0]]))
     entries = np.where(transitions == 1)[0]
@@ -71,8 +65,6 @@ def detect_trades(close: np.ndarray, fast: int = 8, slow: int = 30) -> list[Trad
     n = len(close)
     trades: list[Trade] = []
     for entry_idx, exit_idx in zip(entries, exits):
-        # Clamp transitions to the valid bar range (np.diff over a padded
-        # signal can produce indices == n).
         entry_idx = min(int(entry_idx), n - 2)
         exit_idx = min(int(exit_idx), n - 1)
         e_fill = entry_idx + 1
@@ -88,48 +80,6 @@ def detect_trades(close: np.ndarray, fast: int = 8, slow: int = 30) -> list[Trad
             )
         )
     return trades
-
-
-def equity_curve(trades: list[Trade], multiplier: float, n_bars: int) -> np.ndarray:
-    """Cumulative dollar PnL by bar, with commission applied per side per
-    trade. multiplier converts price points to dollars (50.0 for ES-style
-    futures, 1.0 for the buggy implementation)."""
-    pnl = np.zeros(n_bars)
-    for t in trades:
-        dollars = t.points() * multiplier - 2 * COMMISSION_PER_SIDE
-        pnl[t.exit_idx] += dollars
-    return np.cumsum(pnl)
-
-
-def reconcile(
-    trades_a: list[Trade],
-    trades_b: list[Trade],
-    multiplier_a: float,
-    multiplier_b: float,
-) -> tuple[int, int, list[tuple[int, float, float]]]:
-    """Compare the two implementations trade-by-trade. Returns the count
-    matched, the count mismatched, and a list of (trade_idx, dollars_a,
-    dollars_b) for the first 5 trades."""
-    n = min(len(trades_a), len(trades_b))
-    matched = 0
-    mismatched = 0
-    sample = []
-    for i in range(n):
-        ta = trades_a[i]
-        tb = trades_b[i]
-        if ta.entry_idx != tb.entry_idx or ta.exit_idx != tb.exit_idx:
-            mismatched += 1
-        else:
-            matched += 1
-        if i < 5:
-            sample.append(
-                (
-                    i,
-                    ta.points() * multiplier_a - 2 * COMMISSION_PER_SIDE,
-                    tb.points() * multiplier_b - 2 * COMMISSION_PER_SIDE,
-                )
-            )
-    return matched, mismatched, sample
 
 
 def plot(close: np.ndarray, eq_buggy, eq_correct, eq_third, out_path: Path) -> None:
@@ -161,10 +111,6 @@ def plot(close: np.ndarray, eq_buggy, eq_correct, eq_third, out_path: Path) -> N
     ax_top.legend(frameon=False, loc="upper left", fontsize=9)
     _style(ax_top, text_color)
 
-    # Bottom: ratio between the buggy curve and one of the correct ones.
-    # np.where evaluates both branches before selecting, so the divide must
-    # be wrapped in errstate to suppress the cosmetic divide-by-zero on
-    # cells the where clause discards.
     with np.errstate(divide="ignore", invalid="ignore"):
         ratio = np.where(np.abs(eq_correct) > 1e-9, eq_buggy / eq_correct, np.nan)
     ax_bot.plot(bars, ratio, color=accent_buggy, linewidth=1.4)
@@ -206,25 +152,31 @@ def _style(ax, text_color: str) -> None:
 
 def main() -> None:
     print("Generating synthetic OHLC...")
-    bars = generate_ohlc(n_bars=4_000, seed=42)
+    bars = regime_switching_ohlc(n_bars=4_000, seed=42)
     close = bars["close"]
 
     print("Detecting trades on three implementations...")
     trades_a = detect_trades(close)
-    trades_b = detect_trades(close)  # Same strategy, different implementation.
-    trades_c = detect_trades(close)  # Independent third implementation.
+    trades_b = detect_trades(close)
+    trades_c = detect_trades(close)
 
-    eq_buggy = equity_curve(trades_a, multiplier=1.0, n_bars=len(close))
-    eq_correct = equity_curve(trades_b, multiplier=POINT_MULTIPLIER, n_bars=len(close))
-    eq_third = equity_curve(trades_c, multiplier=POINT_MULTIPLIER, n_bars=len(close))
+    eq_buggy = equity_curve(trades_a, multiplier=1.0, n_bars=len(close), commission_per_side=COMMISSION_PER_SIDE)
+    eq_correct = equity_curve(trades_b, multiplier=POINT_MULTIPLIER, n_bars=len(close), commission_per_side=COMMISSION_PER_SIDE)
+    eq_third = equity_curve(trades_c, multiplier=POINT_MULTIPLIER, n_bars=len(close), commission_per_side=COMMISSION_PER_SIDE)
 
-    matched, mismatched, sample = reconcile(trades_a, trades_b, 1.0, POINT_MULTIPLIER)
+    result = reconcile_trade_lists(
+        trades_a=trades_a,
+        trades_b=trades_b,
+        multiplier_a=1.0,
+        multiplier_b=POINT_MULTIPLIER,
+        commission_per_side=COMMISSION_PER_SIDE,
+    )
 
     out_path = OUT_DIR / "parity_audit.png"
     plot(close, eq_buggy, eq_correct, eq_third, out_path)
 
     print()
-    print(f"Trade detection                 {matched} matched, {mismatched} mismatched")
+    print(f"Trade detection                 {result.n_matched} matched, {result.n_mismatched} mismatched")
     print(f"Total trades                    {len(trades_a)}")
     print()
     print(f"Final PnL")
@@ -236,7 +188,7 @@ def main() -> None:
     print()
     print(f"First 5 trades (per-trade dollar PnL)")
     print(f"  {'#':<4}{'buggy':>14}{'correct':>14}{'ratio':>10}")
-    for i, dollars_a, dollars_b in sample:
+    for i, dollars_a, dollars_b in result.sample:
         ratio = dollars_a / dollars_b if abs(dollars_b) > 1e-9 else float("nan")
         print(f"  {i:<4}{dollars_a:>14,.2f}{dollars_b:>14,.2f}{ratio:>10.4f}")
     print()

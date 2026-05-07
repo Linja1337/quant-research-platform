@@ -11,6 +11,7 @@ to expose.
 
 Run
 ---
+    pip install -e .
     python demos/walk_forward_demo.py
 
 Output
@@ -26,14 +27,19 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from _synthetic import StrategyConfig, generate_ohlc
+from quant_platform.parity.synthetic import StrategyConfig, regime_switching_ohlc
+from quant_platform.validation.dsr import sharpe_ratio
+from quant_platform.validation.walk_forward import (
+    walk_forward_efficiency,
+    walk_forward_folds,
+)
 
 OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 N_BARS = 8_000
 N_FOLDS = 6
-IS_FRACTION = 0.6  # IS window is this fraction of each fold's bars.
+IS_FRACTION = 0.6
 
 FAST_GRID = list(range(3, 13))
 SLOW_GRID = list(range(15, 51, 5))
@@ -51,21 +57,7 @@ class FoldResult:
 
     @property
     def wfe(self) -> float:
-        # WFE = OOS / IS only makes sense when IS is materially nonzero.
-        # When the in-sample edge collapses to near zero, the ratio becomes
-        # uninformative; report NaN and exclude it from the mean.
-        if abs(self.is_sharpe) < 0.1:
-            return float("nan")
-        return self.oos_sharpe / self.is_sharpe
-
-
-def per_bar_sharpe(per_bar_pnl: np.ndarray) -> float:
-    """Per-bar Sharpe (mean / std). No artificial annualization on synthetic
-    data, since bars-per-day is undefined here. The point of the demo is the
-    IS-vs-OOS gap, not the absolute Sharpe scale."""
-    if per_bar_pnl.std() < 1e-12:
-        return 0.0
-    return float(per_bar_pnl.mean() / per_bar_pnl.std())
+        return walk_forward_efficiency(self.is_sharpe, self.oos_sharpe)
 
 
 def best_config_in_window(close: np.ndarray) -> tuple[int, int, float]:
@@ -76,36 +68,35 @@ def best_config_in_window(close: np.ndarray) -> tuple[int, int, float]:
                 continue
             cfg = StrategyConfig(fast=fast, slow=slow, kind="sma")
             pnl, _ = cfg.trades(close)
-            sr = per_bar_sharpe(pnl)
+            sr = sharpe_ratio(pnl)
             if sr > best[2]:
                 best = (fast, slow, sr)
     return best
 
 
-def run() -> tuple[list[FoldResult], dict[str, np.ndarray]]:
-    bars = generate_ohlc(n_bars=N_BARS, seed=42)
+def run() -> list[FoldResult]:
+    bars = regime_switching_ohlc(n_bars=N_BARS, seed=42)
     close = bars["close"]
 
-    fold_size = len(close) // N_FOLDS
-    is_size = int(fold_size * IS_FRACTION)
+    folds = walk_forward_folds(
+        n_bars=len(close),
+        n_folds=N_FOLDS,
+        is_fraction=IS_FRACTION,
+        min_oos_bars=50,
+    )
     results: list[FoldResult] = []
-
-    for f in range(N_FOLDS):
-        start = f * fold_size
-        end = start + fold_size if f < N_FOLDS - 1 else len(close)
-        is_close = close[start : start + is_size]
-        oos_close = close[start + is_size : end]
-        if len(oos_close) < 50:
-            continue
+    for fold in folds:
+        is_close = close[fold.is_slice]
+        oos_close = close[fold.oos_slice]
 
         best_fast, best_slow, is_sr = best_config_in_window(is_close)
         cfg = StrategyConfig(fast=best_fast, slow=best_slow, kind="sma")
         oos_pnl, _ = cfg.trades(oos_close)
         is_pnl, _ = cfg.trades(is_close)
-        oos_sr = per_bar_sharpe(oos_pnl)
+        oos_sr = sharpe_ratio(oos_pnl)
         results.append(
             FoldResult(
-                fold=f + 1,
+                fold=fold.fold,
                 best_fast=best_fast,
                 best_slow=best_slow,
                 is_sharpe=is_sr,
@@ -114,8 +105,7 @@ def run() -> tuple[list[FoldResult], dict[str, np.ndarray]]:
                 oos_pnl_total=float(oos_pnl.sum()),
             )
         )
-
-    return results, bars
+    return results
 
 
 def plot(results: list[FoldResult], out_path: Path) -> None:
@@ -188,7 +178,7 @@ def _style(ax, text_color: str) -> None:
 
 def main() -> None:
     print("Generating synthetic OHLC bars...")
-    results, _ = run()
+    results = run()
     out_path = OUT_DIR / "walk_forward.png"
     plot(results, out_path)
 
